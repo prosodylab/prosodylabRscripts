@@ -1,36 +1,68 @@
 
 
-# for reshape, cherck output columns vary by id variables
-# example:
-# idvariable=c("recordedFile")
-# timevariable=c("Syllable")
-# both.wide=stats::reshape(both,
-#                          idvar=idvariable,
-#                          timevar=timevariable,
-#                          v.names=whichColumnsVary(both,idvariable,timevariable),
-#                          direction="wide")
-#
-whichColumnsVary <- function(df,idvar,timevar){
+
+whichColumnsVary <- function(df,
+                             idVariables = c("experiment","participant","item","condition"),
+                             timeVariable = "ioiLabel"
+                             ){
   #
   require(dplyr)
+  
+  # Check whether union(idVariables,timeVariable) uniquely identify rows
   #
-  # Check whether idvar+timevar uniquely identify rows
-  #
-  countDuplicates=df %>% group_by_at(union(idvar,timevar)) %>%
-    dplyr::summarise(count=n()) %>% 
-    filter(count!=1)
-  if (nrow(countDuplicates)!=0){print('idvar+timevar do not unique identify rows') }
+  doublets = checkUniqueness(df,union(idVariables,timeVariable))
+  if (nrow(doublets)!=0){
+    warning(
+      cat('idVariables + timeVariable do not uniquely identify rows.\n', 
+          'Check with: checkUniqueness(df, ', deparse(union(idVariables,timeVariable)),'))')
+      )
+  }
+  
   #
   # Check which columns vary and return those column names
-  otherColumns=setdiff(names(df),union(idvar,timevar))
-  varyingColumns = df %>% group_by_at(idvar) %>%
+  otherColumns=setdiff(names(df),union(idVariables,timeVariable))
+  varyingColumns = df %>% group_by_at(idVariables) %>%
     dplyr::mutate_at(otherColumns,n_distinct) %>% 
     as.data.frame %>%
-    dplyr::select(-one_of(union(idvar,timevar))) %>%
+    dplyr::select(-one_of(union(idVariables,timeVariable))) %>%
     dplyr::select(which(colMeans(.) > 1)) %>%
     names()
+
   return(varyingColumns)
+  
+  # example
+  # for reshape, cherck output columns vary by id variables
+  # example:
+  # idVariables=c("recordedFile")
+  # timeVariable=c("Syllable")
+  # both.wide=stats::reshape(both,
+  #                          idvar=idVariable,
+  #                          timevar=timeVariable,
+  #                          v.names=whichColumnsVary(both,idVariables,timeVariable),
+  #                          direction="wide")
+  #
 }   
+
+# check uniqueness of id columns
+checkUniqueness <- function(df,idVariables=c('experiment','item','condition','participant','ioiLabel')){
+  
+  # add filename to the output if it's a column
+  if ("recordedFile" %in% colnames(df)) {
+    idVariables = union(idVariables,"recordedFile")
+  }
+  if ("fileName" %in% colnames(df)) {
+    idVariables = union(idVariables,"fileName")
+  }
+  
+  nonUniqueRows = df %>%
+    group_by_at(idVariables) %>%
+    summarise(count = n()) %>%
+    filter(count>1) %>%
+    as.data.frame()
+  
+  return(nonUniqueRows)
+  
+}
 
 
 convertVariables <- function(df) {
@@ -264,18 +296,36 @@ addAnnotation = function(df,fileName,identVariables){
   
   return(df)
 }  
+
   
-addAcoustics = function(df,acousticsFilename,idvariable=c('experiment','item','condition','participant'),timevariable='woiLabel'){
+addAcoustics = function(df,acousticsFilename,idvariable=c('experiment','item','condition','participant'),timevariable='ioiLabel'){
+  
+  require("tidyverse")
+  options(dplyr.summarise.inform = FALSE)
   
   acoustics = read.csv(acousticsFilename,sep='\t') %>% convertVariables()
   
-  if (idvariable == 'recordedFile'){
+  # check if old extraAcoustics script was used, if so change default timevariable to "woiLabel"  
+  if (timevariable == 'ioiLabel'){
+    if ("woiLabel" %in% colnames(acoustics)) {
+      timevariable = 'woiLabel'
+    }
+  }
+
+  # correct column name for soundfilename in acoustics file if necessary
+  if ('recordedFile' %in% idvariable){
     names(acoustics)[names(acoustics) == 'fileName'] <- 'recordedFile'
+  }
+  
+  # create "recordedFile" column in experiment spreadsheet if necessary
+  if (!("recordedFile" %in% colnames(df))) {
+    df$recordedFile = paste0(df$experiment,"_",df$participant,"_",df$item,"_",df$condition,".wav")
   }
   
   acoustics = acoustics  %>% 
     convertVariables() %>%
-    filter(!is.na(woiLabel)) %>% 
+    # filter out lines without ioiLabel
+    filter(!is.na({{timevariable}})&!({{timevariable}}=="")) %>% 
     stats::reshape(idvar=idvariable,
                    timevar=timevariable,
                    v.names=whichColumnsVary(acoustics,idvariable,timevariable),
@@ -289,15 +339,19 @@ addAcoustics = function(df,acousticsFilename,idvariable=c('experiment','item','c
 }
 
 
-relativeMeasures = function(df,woi1, woi2) {
+relativeMeasures = function(df,woi1, woi2,label="") {
  
+  labelPitch = paste0("rPitch",label)
+  labelDuration = paste0("rDuration",label)
+  labelIntensity = paste0("rIntensity",label)
+  
   # Relative rations
   # semitones:
-  df$rPitch = 12*log2(df[,paste0('maxPitch.',woi1)]/ df[,paste0('maxPitch.',woi2)])
+  df[labelPitch] = 12*log2(df[,paste0('maxPitch.',woi1)]/ df[,paste0('maxPitch.',woi2)])
   # ratio of durations (difference in log duration):
-  df$rDuration = log(df[,paste0('duration.',woi1)]) - log(df[,paste0('duration.',woi2)])
+  df[labelDuration] = log(df[,paste0('duration.',woi1)]) - log(df[,paste0('duration.',woi2)])
   # ratio of loudness (difference of dB):
-  df$rIntensity = log(df[,paste0('maxIntensity.',woi1)]) - log(df[,paste0('maxIntensity.',woi2)])
+  df[labelIntensity] = log(df[,paste0('maxIntensity.',woi1)]) - log(df[,paste0('maxIntensity.',woi2)])
   
   # Relative measures
   #df$rPitch=12*log2(df$maxPitch.1/df$maxPitch.2)
