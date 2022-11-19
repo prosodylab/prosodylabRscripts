@@ -295,7 +295,9 @@ addAnnotation = function(df,fileName,identVariables){
     convertVariables()
   
   return(df)
-}  
+}
+# example: d=addAnnotation(d,'dataAcoustics/homphInitialSabrina.txt','recordedFile')
+
 
   
 addAcoustics = function(df,acousticsFilename,idvariable=c('experiment','item','condition','participant'),timevariable='ioiLabel'){

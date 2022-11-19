@@ -5,16 +5,24 @@
 install.packages(
   c("tidyverse",
     "devtools",
+    "brms",
+    "tidybayes",
+    "bayestestR",
+    "bayesplot",
+    "loo",
+    "modelr",
+    "languageR",
+    "patchwork",
     "plyr",
     "ggplot2",
     "scales",
     "rms",
-    "ordinal", 
-    "Hmisc", 
-    "lme4", 
+    "ordinal",
+    "Hmisc",
+    "lme4",
     "lmerTest",
-    "zipfR", 
-    "arm", 
+    "zipfR",
+    "arm",
     "texreg",
     "reshape",
     "car",
@@ -23,9 +31,15 @@ install.packages(
     "shinyWidgets",
     "bookdown",
     "magick",
-    "jsonlite"
-    ), 
+    "jsonlite",
+    "languageserver" # for auto-completion of r code in vscode
+    ),
   dependencies = TRUE, repos = "http://cran.r-project.org")
 
 devtools::install_github("crsh/papaja")
 
+
+a = c(1, #one
+      3, # 3
+      4  #4 
+      )
