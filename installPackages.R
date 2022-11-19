@@ -1,9 +1,11 @@
 
 
-# packages needed in prososdylab
+# packages needed in prosodylab
 
 install.packages(
-  c("tidyverse",
+  c(
+    "devtools",
+    "tidyverse",
     "devtools",
     "brms",
     "tidybayes",
@@ -33,13 +35,9 @@ install.packages(
     "magick",
     "jsonlite",
     "languageserver" # for auto-completion of r code in vscode
-    ),
-  dependencies = TRUE, repos = "http://cran.r-project.org")
+  ),
+  dependencies = TRUE,
+  repos = "http://cran.r-project.org"
+)
 
 devtools::install_github("crsh/papaja")
-
-
-a = c(1, #one
-      3, # 3
-      4  #4 
-      )
