@@ -312,6 +312,9 @@ addAcoustics = function(df,acousticsFilename,idvariable=c('experiment','item','c
     if ("woiLabel" %in% colnames(acoustics)) {
       timevariable = 'woiLabel'
     }
+    if ("woilabel" %in% colnames(acoustics)) {
+      timevariable = 'woilabel'
+    }
   }
 
   # correct column name for soundfilename in acoustics file if necessary
@@ -364,3 +367,84 @@ relativeMeasures = function(df,woi1, woi2,label="") {
   
   return(df)
 }
+
+
+# helmert coding
+
+helmertContrasts <- function(df,column,contrastLabels) {
+  # df = data frame, column: column to be helmert coded
+  # contrasts: name of the Helmert contrasts
+  # function assumes that coding will be level 1 vs. later, level 2 vs. later, etc.
+  
+  if (length(levels(df[[column]]))!=(length(contrastLabels)+1)){
+    cntr=NA
+  } else {
+    # cre  ate helmert coding based on reverse order of levels
+    # so that it's level 1 vs. later, level 2 vs. later, etc.
+    cntr = contr.helmert(rev(levels(df[[column]])))
+    # change ordering of rows and columns to fit with left-to-right definition of contrasts
+    cntr = cntr[nrow(cntr):1,ncol(cntr):1]
+    # label contrasts
+    colnames(cntr) = contrastLabels
+    # change each column so that differences between max and min is 1
+    # and such that first part of each constrast is negative
+    for (x in 1:ncol(cntr)) {
+      cntr[,x] = cntr[,x] / -(ncol(cntr) + 2 - x)
+    } 
+  } 
+  # 
+  cat("\n Helmert contrasts for variable ",column,":\n\n")
+  print(cntr)
+  #
+  return(cntr)
+}
+
+
+addHelmertPredictors <- function(df,column,contrastLabels) {
+  # add variables for each individual helmert contrast
+  # get helmert contrasts:
+  cntr = helmertContrasts(df,column,contrastLabels)
+  # code contrasts:
+  contrasts(df[[column]]) = cntr
+  # uses model.matrix.lm in order to be sure number of rows is correct
+  # even if there are NA in the dependent variable
+  for (i in 1:length(contrastLabels)){
+    df[[contrastLabels[i]]] = (model.matrix.lm(formula(paste("~ ",column)),df,na.action=na.pass)[,i+1])
+  }
+  #
+  # print out formula snippet for model
+  # new variables for contrasts created, here's some code for a potential model:
+  labelString = paste0(contrastLabels, collapse = " + ")
+  cat("\n data frame with added columns in $df\n ")
+  cat("\n Potential code snippet for model:\n\n ")
+  formulaPredictors =  paste("~ ",labelString, " + (",labelString,"||item) + (",labelString,"||participant)")
+  formulaDoublePipe =  paste("~ ",labelString, " + (",labelString,"|item) + (",labelString,"|participant)")
+  cat('$formulaPredictors: ', formulaPredictors,"\n ")
+  cat('$formulaDoublePipe: ', formulaDoublePipe,"\n\n ")
+  
+  returnList = list("df" = df, 
+                    "formula" =  formulaPredictors,
+                    "formulaDouble" =  formulaDoublePipe
+                    )
+  return(returnList)
+  
+}
+
+
+# example use:
+
+# helmertCoded = addHelmertPredictors(
+#   df,
+#   "Construction",
+#   c(
+#     "TrueControl.vs.other",
+#     "False.vs.maybe",
+#     "Uninverted.vs.otherMaybe",
+#     "Inverted.vs.clefts",
+#     "ItCleft.vs.PseudoCleft"
+#   )
+#   )
+# 
+# d = helmertCoded$df
+# formulaPredictors = helmertCoded$formulaPredictors
+# formulaDoublePipe = helmertCoded$formulaDoublePipe

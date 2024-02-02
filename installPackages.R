@@ -12,6 +12,7 @@ install.packages(
     "bayestestR",
     "bayesplot",
     "loo",
+    "rstan",
     "modelr",
     "languageR",
     "patchwork",
@@ -34,7 +35,8 @@ install.packages(
     "bookdown",
     "magick",
     "jsonlite",
-    "languageserver" # for auto-completion of r code in vscode
+    "languageserver", # for auto-completion of r code in vscode
+    "kableExtra"
   ),
   dependencies = TRUE,
   repos = "http://cran.r-project.org"
