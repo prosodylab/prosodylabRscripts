@@ -423,8 +423,8 @@ addHelmertPredictors <- function(df,column,contrastLabels) {
   cat('$formulaDoublePipe: ', formulaDoublePipe,"\n\n ")
   
   returnList = list("df" = df, 
-                    "formula" =  formulaPredictors,
-                    "formulaDouble" =  formulaDoublePipe
+                    "formulaPredictors" =  formulaPredictors,
+                    "formulaDoublePipe" =  formulaDoublePipe
                     )
   return(returnList)
   
