@@ -417,8 +417,8 @@ addHelmertPredictors <- function(df,column,contrastLabels) {
   labelString = paste0(contrastLabels, collapse = " + ")
   cat("\n data frame with added columns in $df\n ")
   cat("\n Potential code snippet for model:\n\n ")
-  formulaPredictors =  paste("~ ",labelString, " + (",labelString,"||item) + (",labelString,"||participant)")
-  formulaDoublePipe =  paste("~ ",labelString, " + (",labelString,"|item) + (",labelString,"|participant)")
+  formulaPredictors =  paste(labelString, " + (",labelString,"||item) + (",labelString,"||participant)")
+  formulaDoublePipe =  paste(labelString, " + (",labelString,"|item) + (",labelString,"|participant)")
   cat('$formulaPredictors: ', formulaPredictors,"\n ")
   cat('$formulaDoublePipe: ', formulaDoublePipe,"\n\n ")
   
