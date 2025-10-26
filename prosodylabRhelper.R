@@ -90,13 +90,62 @@ convertVariables <- function(df) {
 }
 
 
-importData <- function(pathData,pathStudyFile) {
+convertColumnsExperimenter <- function(df) {
+  
+  # these columns will be coded as numeric, all others as factors:
+  numericColumnsExperimenter = c("trial_index","time_elapsed","rt","correct","headPhoneScreenerScore",
+                                 "birth.year",
+                                 "firstStartage","firstSpeaking","firstUnderstanding",
+                                 "secondStartage","secondSpeaking","secondUnderstanding",
+                                 "thirdStartage","thirdSpeaking","thirdUnderstanding",
+                                 "fourthStartage","fourthSpeaking","fourthUnderstanding"
+  ) 
+  
+  # convert to numeric column, otherwise treat as factor:
+  for (i in 1:ncol(df)) {
+    if (colnames(df)[i] %in% numericColumnsExperimenter) {
+      df[, i] <- as.numeric(as.character(df[, i]))
+    } else {
+      df[, i] <- as.factor(as.character(df[, i]))
+    }
+  }
+  return(df)
+}
+
+
+# imports json files and process them, returning a list with two data frames
+# one called experimentSettings
+# one with the data called experimentTrials
+
+importData <- function(partsToKeep=c('question1','question1'),
+                       experimentFolder='.',
+                       pathStimulusFile,
+                       pathData='data') {
   
   require(jsonlite)
   require(tidyverse)
   
-  studyFile = read.csv(pathStudyFile,
-                       sep="\t", header=TRUE) %>% convertVariables()
+  pathData = paste0(experimentFolder,'/',pathData)
+  
+  # determine name of stimulusFile based on index.html file
+  if (missing(pathStimulusFile)) {
+    #
+    # load index.html file
+    
+    pathStimulusFile = readLines(paste0(experimentFolder,'/../index.html'))
+    # keep only the line with the text we're looking for
+    pathStimulusFile <- pathStimulusFile[grepl(pattern = "  stimulusFile: ", x = pathStimulusFile, fixed = TRUE)]
+    # extract stimulusFile name:
+    pathStimulusFile  = paste0(regmatches(pathStimulusFile, gregexpr("(?<=\')(.*?)(?=\')", pathStimulusFile, perl = TRUE)))
+    # doesn't work:
+    #gsub(".*\'|\'.*", "", stimulusFile)
+    #str_extract(stimulusFile, "\'.*?\'")
+  }
+  
+  
+  # import experiment spreadsheet and turn columns into factors
+  studyFile = read.csv(paste0(experimentFolder,'/',pathStimulusFile),
+                       sep="\t", header=TRUE) %>% convertColumnsExperimenter()
   
   # create a list of the "data*"  files from your target directory
   fileList <- list.files(path=pathData,pattern="data*")
@@ -125,7 +174,31 @@ importData <- function(pathData,pathStudyFile) {
   # questionnaire data:
   # how to convert json cell into  columns (there might be an easier way using  jsonlite more directly?): https://stackoverflow.com/questions/41988928/how-to-parse-json-in-a-dataframe-column-using-r
   
-  #  debriefing questionnaire data:
+  
+  #  extract study parameters into separate variable
+  #  only select existing columns:
+  
+  selectColumns = c("path", "stimulusFile", "testRun", "language", "logFile", "soundCheckFile", 
+                    "recordingTimeOut", "completionLink", "completionCode", "pListMethod", 
+                    "participantCodeMethod", "displayDataAfterFinish", "showProgressBar", 
+                    "fullScreen", "hello", "consent", "languageQuestionnaire", "soundCheck", 
+                    "micCheck", "headphoneScreener.includeHeadphoneScreener", 
+                    "headphoneScreener.stimuli", "headphoneScreener.numberChances", 
+                    "headphoneScreener.threshold", "headphoneScreener.excludeOnFail", 
+                    "headphoneScreener.completionFailLink", "headphoneScreener.failMessage", "experimentSessions", "postExperimentQuestionnaire", 
+                    "musicQuestionnaire", "goodbye", "experimentOnly")
+  
+  selectColumns = intersect(selectColumns,colnames(d))
+  
+  #
+  if (nrow(filter(d,component=='experimentSettings'))!=0){
+    experimentSettings <- d %>% 
+      filter(component=='experimentSettings') %>% 
+      dplyr::select(all_of(selectColumns))
+    d = d %>%  dplyr::select(-all_of(selectColumns))
+  }
+  
+  #  add post-experiment questionnaire data to participant data frame:
   if (nrow(filter(d,component=='Post-experiment Questionnaire'))!=0){
     participants <- d %>% 
       filter(component=='Post-experiment Questionnaire') %>% 
@@ -136,7 +209,7 @@ importData <- function(pathData,pathStudyFile) {
       right_join(participants, by = c("participant"))
   }
   
-  #  music  questionnaire data:
+  #  add music  questionnaire data to participant data frame:
   if (nrow(filter(d,component=='Music Questionnaire'))!=0){
     participants <- d %>% 
       filter(component=='Music Questionnaire') %>% 
@@ -147,6 +220,7 @@ importData <- function(pathData,pathStudyFile) {
       right_join(participants, by = c("participant"))
   }
   
+  # add language questionnaire to participant data frame
   if (nrow(filter(d,component=='Language Questionnaire'))!=0){
     participants <- d %>% 
       filter(component=='Language Questionnaire') %>% 
@@ -157,6 +231,7 @@ importData <- function(pathData,pathStudyFile) {
       right_join(participants, by = c("participant"))
   }
   
+  # head headphone screener to participant data frame
   if (nrow(filter(d,component=='Headphone screener'))!=0){
     participants = d %>% 
       filter(component=='Headphone screener'&grepl("Headphone screener question",trialPart)) %>%
@@ -167,17 +242,29 @@ importData <- function(pathData,pathStudyFile) {
       right_join(participants, by = c("participant"))
   }
   
-  d <- d %>% filter(component=='Experiment') %>%
-    # combine  with participant data
-    left_join(participants,by = c("participant")) %>%
+  
+  # process experimental results, keeping only specified trialparts:
+  
+  # questions were missing component specification in early experiments:
+  d$component[d$trialPart=='question1'&is.na(d$component)]='experiment'
+  
+  # goal: get all information for a trial on a single line
+  
+  experimentTrials = d %>% 
+    filter(trialPart%in%partsToKeep)
+  
+  experimentTrials <- experimentTrials %>%
+    # combine  with participant information
+    right_join(participants,by = c("participant")) %>%
     # turn empty strings (e.g., "",  '',  "  ") into NA
     apply(2, function(x) gsub("^$|^ $", NA, x))  %>%
-    as.data.frame %>% convertVariables()
+    as.data.frame %>% convertColumnsExperimenter()
   
-  d = left_join(d,studyFile,by=c("experiment","item","condition")) ## %>%
-    #filter(!is.na(chosenOption))
+  experimentTrials = left_join(experimentTrials,studyFile,by=c("experiment","item","condition")) ## %>%
+  #filter(!is.na(chosenOption))
   
-  return(d)
+  returnList = list("settings" = experimentSettings, "data" =  experimentTrials)
+  return(returnList)
   
 }
 
