@@ -167,7 +167,7 @@ plotAcoustics <- function(data,
     lab_df <- df |>
       dplyr::group_by(!!x_quo, dplyr::across(dplyr::all_of(facetVariables))) |>
       dplyr::summarise(
-        m = round(mean(.data[[y_name]], na.rm = TRUE), 1),
+        m = round(mean(.data[[y_name]], na.rm = TRUE), 2),
         n = dplyr::n(),
         .groups = "drop"
       ) |>
