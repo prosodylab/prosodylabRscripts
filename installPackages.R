@@ -5,6 +5,7 @@
 install.packages(
   c(
     "devtools",
+    "arm",
     "tidyverse",
     "devtools",
     "brms",
@@ -36,10 +37,25 @@ install.packages(
     "magick",
     "jsonlite",
     "languageserver", # for auto-completion of r code in vscode
-    "kableExtra"
+    "kableExtra",
+    "xtable",
+    'tidymodels',
+    'party', # random forest package used in jphon paper
+    'partykit', # random forest package that is follow up to party
+    'ranger', # random forest package that is fast for big data
+    'themis', # downsampling for data balancing
+    'vip', # variable importance for random forest etc.
+    'bonsai', # needed for partykit random forest
+    'caret',
+    'cmdstanr'
   ),
   dependencies = TRUE,
   repos = "http://cran.r-project.org"
 )
+
+library(cmdstanr)
+
+cmdstanr::install_cmdstan()   # one-time install; downloads + compiles CmdStan
+cmdstanr::cmdstan_version()   # should print a version if it worked
 
 devtools::install_github("crsh/papaja")

@@ -12,7 +12,10 @@ plotLogodds <- function(data,
                          label_hjust = -0.25,
                          label_vjust = 0,
                          base_size = 14,
-                         plotTitle = "") {
+                         plotTitle = "",
+                         yPercLimits = NULL, # e.g. c(1, 99): shared % range for the axis. If error bar extends beyondrange you choose, widen (e.g. c(0.5, 99.5)
+                         yPercBreaks = NULL  # e.g. c(1,5,10,25,50,75,90,95,99): % tick labels
+) {
 
   
   # exclude NAs of indepdent variables:
@@ -89,14 +92,19 @@ plotLogodds <- function(data,
   # Add facets if specified
   if (!is.null(facet_layer)) p <- p + facet_layer
   
+  
+  # Convert percent limits/breaks to the log-odds scale the axis lives on
+  y_limits   <- if (!is.null(yPercLimits)) qlogis(yPercLimits / 100) else NULL
+  sec_breaks <- if (!is.null(yPercBreaks)) yPercBreaks else ggplot2::waiver()
+  
   # Scales, theme, labels
   p +
     ggplot2::scale_y_continuous(
       name = y_main,
-      sec.axis = ggplot2::sec_axis(~ plogis(.) * 100, name = y_sec)
+      sec.axis = ggplot2::sec_axis(~ plogis(.) * 100, name = y_sec, breaks = sec_breaks)
     ) +
     ggplot2::xlab(xLab) +
-    coord_cartesian(clip = "off") +
+    coord_cartesian(clip = "off", ylim = y_limits) +
     scale_x_discrete(expand = expansion(mult = c(0.2, 0.2))) +
     ggplot2::theme_minimal(base_size = base_size) +
     ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
@@ -113,6 +121,83 @@ plotLogodds <- function(data,
 }
 
 
+plotLikert  <- function(data,
+                                      xVar,
+                                      yVar,
+                                      yRange = c(1,6),
+                                      facetVariables = character(0),
+                                      xLab = "",
+                                      yLab = "",
+                                      use_repel = FALSE,
+                                      point_size = 3,
+                                      errorbar_width = 0.15,
+                                      label_hjust = -0.25,
+                                      label_vjust = 0,
+                                      base_size = 12,
+                                      plotTitle = "") {
+  
+  
+  # exclude NAs of indepdent variables:
+  data <- data %>%
+    dplyr::filter(
+      !is.na({{ xVar }}),
+      dplyr::if_all(dplyr::all_of(facetVariables), ~ !is.na(.x))
+    )
+  
+  # Require core packages and load if not already loaded
+  if (!require(dplyr, quietly = TRUE)) stop("Package 'dplyr' is required.")
+  if (!require(ggplot2, quietly = TRUE)) stop("Package 'ggplot2' is required.")
+  
+  # Load ggrepel only if requested
+  repel_available <- FALSE
+  if (isTRUE(use_repel)) {
+    repel_available <- require(ggrepel, quietly = TRUE)
+    if (!repel_available) {
+      message("Requested use_repel=TRUE but 'ggrepel' is not installed; falling back to geom_text().")
+    }
+  }
+  
+  # Build facet layer (0, 1, or 2 vars)
+  facet_layer <- NULL
+  if (length(facetVariables) == 1) {
+    facet_layer <- ggplot2::facet_grid(as.formula(paste0("~", facetVariables[1])))
+  } else if (length(facetVariables) >= 2) {
+    facet_layer <- ggplot2::facet_grid(as.formula(paste0(facetVariables[1], " ~ ", facetVariables[2])))
+  }
+  
+  # Labels
+  yLab_base <- if (nzchar(yLab)) yLab else deparse(substitute(yVar))
+  y_main    <- paste0(yLab_base)
+
+  # Base plot (points & error bars on log-odds scale)
+  p <- ggplot2::ggplot(data, ggplot2::aes(x = {{ xVar }}, y = {{ yVar }})) +
+    stat_summary(fun=mean, geom="point",size=5, shape=1) + 
+    stat_summary(fun.data = "mean_cl_boot", geom="errorbar",size=0.6, width=.15)
+
+  # Add facets if specified
+  if (!is.null(facet_layer)) p <- p + facet_layer
+  
+  # Scales, theme, labels
+  p +
+    xlab(xLab) +
+    ylab(y_main) +
+    coord_cartesian(clip = "off") +
+    #scale_x_discrete(expand = expansion(mult = yRange)) +
+    theme_minimal(base_size = base_size) +
+    theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
+    # theme(
+    #   axis.text.x = element_text(angle = 45, hjust = 1),
+    #   plot.margin = margin(t = 20, r = 60, b = 20, l = 20),
+    #   plot.title = element_text(hjust = 0.5,margin = margin(b = 20),face = "bold")
+    # ) + # to give more space for secondary y-axis label and title
+    # theme(
+    #   axis.title.y.right = element_text(margin = margin(l = 10)),
+    #   axis.text.y.right  = element_text(margin = margin(l = 10))
+    # ) + 
+    ggtitle(plotTitle)
+}
+
+
 plotAcoustics <- function(data,
                           xVar,
                           yVar = c("rIntensity","rDuration","rPitch"),
@@ -124,7 +209,7 @@ plotAcoustics <- function(data,
                           errorbar_width = 0.15,
                           xnudge = 0.25,
                           label_vjust = 0.5,
-                          base_size = 14,
+                          base_size = 12,
                           plotTitle = "",
                           orientation = c("horizontal","vertical")) {
   
@@ -254,4 +339,58 @@ plotAcoustics <- function(data,
     )
   
   return(combined)
+}
+
+
+#' Creates a customized variable importance dot-chart (ggplot)
+#' 
+#' @param varimp_vector A named numeric vector containing variable importance scores 
+#'                      (e.g., the output from party::varimp).
+#' @param plot_title A character string for the main title of the plot.
+#' @return A ggplot object.
+plot_varimp_dotchart <- function(varimp_vector, plot_title = "Variable Importance") {
+  
+  # --- 1. Tidy Data ---
+  # Convert the named vector into a data frame/tibble
+  varimp_data <- tibble(
+    Variable = names(varimp_vector), 
+    Importance = varimp_vector
+  ) %>%
+    # Sort the data by Importance for the reorder() function to work correctly
+    arrange(Importance) 
+  
+  # --- 2. Calculate the DEFINED Reference Line Value ---
+  intended_ref_value <- abs(min(varimp_data$Importance)) 
+  
+  # --- 3. Create the ggplot Plot ---
+  vi_plot <- ggplot(varimp_data, aes(x = Importance, y = reorder(Variable, Importance))) +
+    
+    # Use geom_point() to create the dot chart style
+    geom_point(aes(color = Importance > 0), size = 3) + # Using 'color' for points
+    
+    # Draw the vertical line at zero
+    geom_vline(xintercept = 0, linetype = "solid", color = "black") +
+    
+    # Draw the defined reference line at |min(VI)|
+    geom_vline(
+      xintercept = intended_ref_value, 
+      linetype = "dashed", 
+      color = "black", 
+      linewidth = 0.5
+    ) +
+    
+    # Set custom colors for positive/negative importance
+    scale_color_manual(values = c("FALSE" = "#B35A5A", "TRUE" = "#5A8BB3")) +
+    
+    # Theme and Labels
+    labs(
+      title = plot_title,
+      subtitle = paste0("Threshold defined as |min(Importance)| = ", round(intended_ref_value, 5)),
+      x = "Permutation Importance",
+      y = NULL
+    ) +
+    theme_minimal() +
+    theme(legend.position = "none") # Remove the legend for the color aesthetic
+  
+  return(vi_plot)
 }

@@ -69,7 +69,7 @@ convertVariables <- function(df) {
   # columns that are usually read as factors but should be numeric:
   numericColMatlab = c("trialDuration")
   
-  numericColPraatscript = c("rIntensity","rPitch","rDuration","duration", "silence", "duraSil", "phoneLength", "meanPitch", "maxPitch", "maxPitTime", "minPitch", "minPitTime", "pitch1", "pitch1_time", "pitch2", "pitch2_time", "pitch3", "pitch3_time", "pitch4", "pitch4_time", "pitch5", "pitch5_time", "pitch6", "pitch6_time", "pitch7", "pitch7_time", "pitch8", "pitch8_time", "pitch9", "pitch9_time", "pitch10", "pitch10_time", "meanIntensity", "maxIntensity", "maxIntTime", "intensity1", "intensity1_time", "intensity2", "intensity2_time", "intensity3", "intensity3_time", "intensity4", "intensity4_time", "intensity5", "intensity5_time", "intensity6", "intensity6_time", "intensity7", "intensity7_time", "intensity8", "intensity8_time", "intensity9", "intensity9_time", "intensity10", "intensity10_time", "zstart", "zend", "zDuration", "zPhonelength", "zmeanPitch", "zmaxPitch", "zmaxPitTime", "zminPitch", "zminPitTime", "zmeanIntensity", "zmaxIntensity", "zmaxIntTime", "response", "duration", "silence", "durasil", "meanpitch", "maxpitch", "maxPitTime", "minPitch", "minPitTime", "firstpitch", "secondpitch", "thirdpitch", "fourthpitch", "meanIntensity", "maxIntensity", "zduration", "zbeginzone", "zendzone", "zphonelength", "zmeanpitch", "zmaxpitch", "zmaxPitTime", "zminPitch", "zminPitTime", "zfirstpitch", "zsecondpitch", "zthirdpitch", "zfourthpitch", "zmeanIntensity", "zmaxIntensity", "durasil", "meanpit", "maxpitch", "maxPitTime", "minpitch", "minPitTime", "firstpitch", "secondpitch", "thirdpitch", "fourthpitch", "meanIntensity", "maxIntensity", "firstF1", "firstF2", "firstdif", "secondF1", "secondF2", "seconddif", "thirdF1", "thirdF2", "thirddif", "fourthF1", "fourthF2", "fourthdif", "fifthF1", "fifthF2", "fifthdif")
+  numericColPraatscript = c('DurationIntensity_PC1','DurationIntensity_PC2',"rIntensity","rPitch","rDuration","duration", "silence", "duraSil", "phoneLength", "meanPitch", "maxPitch", "maxPitTime", "minPitch", "minPitTime", "pitch1", "pitch1_time", "pitch2", "pitch2_time", "pitch3", "pitch3_time", "pitch4", "pitch4_time", "pitch5", "pitch5_time", "pitch6", "pitch6_time", "pitch7", "pitch7_time", "pitch8", "pitch8_time", "pitch9", "pitch9_time", "pitch10", "pitch10_time", "meanIntensity", "maxIntensity", "maxIntTime", "intensity1", "intensity1_time", "intensity2", "intensity2_time", "intensity3", "intensity3_time", "intensity4", "intensity4_time", "intensity5", "intensity5_time", "intensity6", "intensity6_time", "intensity7", "intensity7_time", "intensity8", "intensity8_time", "intensity9", "intensity9_time", "intensity10", "intensity10_time", "zstart", "zend", "zDuration", "zPhonelength", "zmeanPitch", "zmaxPitch", "zmaxPitTime", "zminPitch", "zminPitTime", "zmeanIntensity", "zmaxIntensity", "zmaxIntTime", "response", "duration", "silence", "durasil", "meanpitch", "maxpitch", "maxPitTime", "minPitch", "minPitTime", "firstpitch", "secondpitch", "thirdpitch", "fourthpitch", "meanIntensity", "maxIntensity", "zduration", "zbeginzone", "zendzone", "zphonelength", "zmeanpitch", "zmaxpitch", "zmaxPitTime", "zminPitch", "zminPitTime", "zfirstpitch", "zsecondpitch", "zthirdpitch", "zfourthpitch", "zmeanIntensity", "zmaxIntensity", "durasil", "meanpit", "maxpitch", "maxPitTime", "minpitch", "minPitTime", "firstpitch", "secondpitch", "thirdpitch", "fourthpitch", "meanIntensity", "maxIntensity", "firstF1", "firstF2", "firstdif", "secondF1", "secondF2", "seconddif", "thirdF1", "thirdF2", "thirddif", "fourthF1", "fourthF2", "fourthdif", "fifthF1", "fifthF2", "fifthdif")
   
   numericColJspsychExperimenter = c("trial_index","time_elapsed","rt","correct","headPhoneScreenerScore") 
   
@@ -387,7 +387,10 @@ addAnnotation = function(df,fileName,identVariables){
 
 
   
-addAcoustics = function(df,acousticsFilename,idvariable=c('experiment','item','condition','participant'),timevariable='ioiLabel'){
+addAcoustics = function(df,
+                        acousticsFilename,
+                        idvariable = c('experiment','item','condition','participant'),
+                        timevariable='ioiLabel'){
   
   require("tidyverse")
   options(dplyr.summarise.inform = FALSE)
@@ -413,6 +416,21 @@ addAcoustics = function(df,acousticsFilename,idvariable=c('experiment','item','c
   if (!("recordedFile" %in% colnames(df))) {
     df$recordedFile = paste0(df$experiment,"_",df$participant,"_",df$item,"_",df$condition,".wav")
   }
+  
+  # Principal components of duration and maxIntensity
+  pca_fit <- prcomp(
+    select(acoustics, duration, maxIntensity), 
+    scale = TRUE
+  )
+  #
+  acoustics <- acoustics %>%
+    mutate(
+      # PC1 captures the largest portion of shared variance
+      DurationIntensity_PC1 = pca_fit$x[, "PC1"],
+      
+      # PC2 captures the remaining variance, orthogonal to PC1
+      DurationIntensity_PC2 = pca_fit$x[, "PC2"]
+    )
   
   acoustics = acoustics  %>% 
     convertVariables() %>%
@@ -485,7 +503,6 @@ helmertContrasts <- function(df,column,contrastLabels) {
   #
   return(cntr)
 }
-
 
 addHelmertPredictors <- function(df,column,contrastLabels) {
   # add variables for each individual helmert contrast
